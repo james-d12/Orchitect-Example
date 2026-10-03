@@ -1,6 +1,9 @@
 apiVersion: score.dev/v1b1
 metadata:
   name: my-payment-service
+# Parameters are strings; list/map/object inputs are JSON strings converted to the module's variable type.
+# ${resources.<key>.*} references are not resolved by Orchitect, they only create dependency-graph edges,
+# so they live in tags rather than in real ID fields.
 resources:
   paymentstorage:
     type: azure.storage-account
@@ -18,10 +21,88 @@ resources:
       account_tier: "Standard"
       location: "ukwest"
       resource_group_name: "dev-rg"
-  #network:
-  #  type: azure.virtual-network
-  #  parameters:
-  #    name: "payment-virtual-network"
-  #    address_space: ["10.0.0.0/16"]
-  #    location: "uksouth"
-  #    resource_group_name: "dev-rg"
+
+  network:
+    type: azure.virtual-network
+    class: indirect
+    id: payment-virtual-network
+    metadata:
+      annotations:
+        description: "Shared VNet for the payment service."
+    parameters:
+      name: "payment-virtual-network"
+      address_space: '["10.0.0.0/16"]'
+      location: "uksouth"
+      resource_group_name: "dev-rg"
+
+  data-subnet:
+    type: azure.subnet.data
+    parameters:
+      name: "payment-data-subnet"
+      # TODO: replace the subscription id
+      parent_id: "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/dev-rg/providers/Microsoft.Network/virtualNetworks/payment-virtual-network"
+      address_prefixes: '["10.0.1.0/24"]'
+      private_endpoint_network_policies: "Disabled"
+
+  keyvault:
+    type: azure.key-vault
+    parameters:
+      name: "mypayment-kv"
+      # TODO: replace the tenant id
+      tenant_id: "00000000-0000-0000-0000-000000000000"
+      sku_name: "standard"
+      purge_protection_enabled: "false"
+      soft_delete_retention_days: "7"
+      location: "uksouth"
+      resource_group_name: "dev-rg"
+
+  registry:
+    type: azure.container-registry
+    parameters:
+      name: "mypaymentregistry"
+      sku: "Basic"
+      admin_enabled: "false"
+      zone_redundancy_enabled: "false"
+      location: "uksouth"
+      resource_group_name: "dev-rg"
+
+  orders-db:
+    type: azure.cosmosdb.orders
+    parameters:
+      name: "mypayment-orders-db"
+      consistency_policy: '{"consistency_level": "Session"}'
+      location: "uksouth"
+      resource_group_name: "dev-rg"
+      tags: '{"depends_on": "${resources.data-subnet.name}"}'
+
+  messaging:
+    type: azure.service-bus
+    parameters:
+      name: "mypayment-messaging"
+      sku: "Standard"
+      topics: '{"payment-processed": {"max_size_in_megabytes": 1024}}'
+      location: "uksouth"
+      resource_group_name: "dev-rg"
+
+  cache:
+    type: azure.redis-cache
+    parameters:
+      name: "mypayment-cache"
+      sku_name: "Basic"
+      capacity: "0"
+      minimum_tls_version: "1.2"
+      zones: '[]'
+      location: "uksouth"
+      resource_group_name: "dev-rg"
+      tags: '{"depends_on": "${resources.data-subnet.name}"}'
+
+  cluster:
+    type: azure.aks
+    parameters:
+      name: "mypayment-aks"
+      # TODO: replace the subscription id
+      parent_id: "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/dev-rg"
+      dns_prefix: "mypayment"
+      default_agent_pool: '{"name": "systempool", "vm_size": "Standard_B2s", "count_of": 1}'
+      location: "uksouth"
+      tags: '{"subnet": "${resources.data-subnet.name}", "registry": "${resources.registry.name}", "keyvault": "${resources.keyvault.name}"}'
