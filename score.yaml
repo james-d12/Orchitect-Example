@@ -35,27 +35,6 @@ resources:
       location: "uksouth"
       resource_group_name: "dev-rg"
 
-  data-subnet:
-    type: azure.subnet.data
-    parameters:
-      name: "payment-data-subnet"
-      # TODO: replace the subscription id
-      parent_id: "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/dev-rg/providers/Microsoft.Network/virtualNetworks/payment-virtual-network"
-      address_prefixes: '["10.0.1.0/24"]'
-      private_endpoint_network_policies: "Disabled"
-
-  keyvault:
-    type: azure.key-vault
-    parameters:
-      name: "mypayment-kv"
-      # TODO: replace the tenant id
-      tenant_id: "00000000-0000-0000-0000-000000000000"
-      sku_name: "standard"
-      purge_protection_enabled: "false"
-      soft_delete_retention_days: "7"
-      location: "uksouth"
-      resource_group_name: "dev-rg"
-
   registry:
     type: azure.container-registry
     parameters:
@@ -73,7 +52,7 @@ resources:
       consistency_policy: '{"consistency_level": "Session"}'
       location: "uksouth"
       resource_group_name: "dev-rg"
-      tags: '{"depends_on": "${resources.data-subnet.name}"}'
+      tags: '{"depends_on": "${resources.network.name}"}'
 
   messaging:
     type: azure.service-bus
@@ -83,26 +62,4 @@ resources:
       topics: '{"payment-processed": {"max_size_in_megabytes": 1024}}'
       location: "uksouth"
       resource_group_name: "dev-rg"
-
-  cache:
-    type: azure.redis-cache
-    parameters:
-      name: "mypayment-cache"
-      sku_name: "Basic"
-      capacity: "0"
-      minimum_tls_version: "1.2"
-      zones: '[]'
-      location: "uksouth"
-      resource_group_name: "dev-rg"
-      tags: '{"depends_on": "${resources.data-subnet.name}"}'
-
-  cluster:
-    type: azure.aks
-    parameters:
-      name: "mypayment-aks"
-      # TODO: replace the subscription id
-      parent_id: "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/dev-rg"
-      dns_prefix: "mypayment"
-      default_agent_pool: '{"name": "systempool", "vm_size": "Standard_B2s", "count_of": 1}'
-      location: "uksouth"
-      tags: '{"subnet": "${resources.data-subnet.name}", "registry": "${resources.registry.name}", "keyvault": "${resources.keyvault.name}"}'
+      tags: '{"depends_on": "${resources.orders-db.name}"}'
