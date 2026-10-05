@@ -1,6 +1,9 @@
 apiVersion: score.dev/v1b1
 metadata:
   name: my-payment-service
+# Parameters are strings; list/map/object inputs are JSON strings converted to the module's variable type.
+# ${resources.<key>.*} references are not resolved by Orchitect, they only create dependency-graph edges,
+# so they live in tags rather than in real ID fields.
 resources:
   paymentstorage:
     type: azure.storage-account
@@ -18,10 +21,45 @@ resources:
       account_tier: "Standard"
       location: "ukwest"
       resource_group_name: "dev-rg"
-  #network:
-  #  type: azure.virtual-network
-  #  parameters:
-  #    name: "payment-virtual-network"
-  #    address_space: ["10.0.0.0/16"]
-  #    location: "uksouth"
-  #    resource_group_name: "dev-rg"
+
+  network:
+    type: azure.virtual-network
+    class: indirect
+    id: payment-virtual-network
+    metadata:
+      annotations:
+        description: "Shared VNet for the payment service."
+    parameters:
+      name: "payment-virtual-network"
+      address_space: '["10.0.0.0/16"]'
+      location: "uksouth"
+      resource_group_name: "dev-rg"
+
+  registry:
+    type: azure.container-registry
+    parameters:
+      name: "mypaymentregistry"
+      sku: "Basic"
+      admin_enabled: "false"
+      zone_redundancy_enabled: "false"
+      location: "uksouth"
+      resource_group_name: "dev-rg"
+
+  orders-db:
+    type: azure.cosmosdb.orders
+    parameters:
+      name: "mypayment-orders-db"
+      consistency_policy: '{"consistency_level": "Session"}'
+      location: "uksouth"
+      resource_group_name: "dev-rg"
+      tags: '{"depends_on": "${resources.network.name}"}'
+
+  messaging:
+    type: azure.service-bus
+    parameters:
+      name: "mypayment-messaging"
+      sku: "Standard"
+      topics: '{"payment-processed": {"max_size_in_megabytes": 1024}}'
+      location: "uksouth"
+      resource_group_name: "dev-rg"
+      tags: '{"depends_on": "${resources.orders-db.name}"}'
